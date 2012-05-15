@@ -8,9 +8,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("UTFGrid")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Microsoft")]
-[assembly: AssemblyProduct("UTFGrid")]
-[assembly: AssemblyCopyright("Copyright © Microsoft 2012")]
+[assembly: AssemblyCompany("National Geographic Society")]
+[assembly: AssemblyProduct("utfgrid")]
+[assembly: AssemblyCopyright("Copyright © 2012 National Geographic Society")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
