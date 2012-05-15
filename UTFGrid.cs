@@ -8,8 +8,9 @@ using ESRI.ArcGIS.Carto;
 using ESRI.ArcGIS.esriSystem;
 using ESRI.ArcGIS.Geodatabase;
 using ESRI.ArcGIS.Geometry;
-using Newtonsoft.Json;
+using Ionic.Zlib;
 using NDesk.Options;
+using Newtonsoft.Json;
 
 namespace NatGeo
 {
@@ -18,6 +19,8 @@ namespace NatGeo
         [STAThread()]
         static void Main (string[] args) {
             bool showHelp = false;
+            bool gzip = false;
+            bool overwrite = false;
             string destination = ".";
             int[] levels = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 };
             HashSet<string> fields = null;
@@ -30,7 +33,9 @@ namespace NatGeo
                 { "f|fields=", 
                   "list of field names to include in UTFGrid data",
                   f => fields = new HashSet<string>(f.Split(new char[] { ',' })) },
-                { "h|help",  "show this message and exit", h => showHelp = h != null },
+                { "z|zip",  "zip the json files using gzip compression before saving", z => gzip = z != null },
+                { "o|overwrite", "overwrite existing files", o => overwrite = o != null },
+                { "h|help",  "show this message and exit", h => showHelp = h != null }
             };
             List<string> extra;
             try {
@@ -54,14 +59,16 @@ namespace NatGeo
                 return;
             }
             RuntimeManager.BindLicense(ProductCode.EngineOrDesktop);
-
-            IMapDocument mapDocument = new MapDocumentClass();
-            mapDocument.Open(extra[0], null);
-            IMap map = mapDocument.ActiveView as IMap;
-            if (map == null) {
-                map = mapDocument.get_Map(0);
-            }
-            mapDocument.Close();
+            IMap map = null;
+            try {
+                IMapDocument mapDocument = new MapDocumentClass();
+                mapDocument.Open(extra[0], null);
+                map = mapDocument.ActiveView as IMap;
+                if (map == null) {
+                    map = mapDocument.get_Map(0);
+                }
+                mapDocument.Close();
+            } catch (Exception) { }
             if (map == null) {
                 Console.WriteLine("Unable to open map at " + extra[0]);
                 return;
@@ -77,10 +84,15 @@ namespace NatGeo
                         Directory.CreateDirectory(folder);
                     }
                     string file = String.Format("{0}\\{1}.grid.json", folder, tile.Row);
-                    if (!File.Exists(file)) {
+                    if (gzip) file += ".gz";
+                    if ((!File.Exists(file)) || overwrite) {
                         Dictionary<string, object> data = CollectData(map, tile.Extent, fields);
                         if (data != null) {
-                            using (System.IO.FileStream fOut = new System.IO.FileStream(file, FileMode.CreateNew)) {
+                            Stream fOut = new System.IO.FileStream(file, FileMode.Create);
+                            if (gzip) {
+                                fOut = new GZipStream(fOut, CompressionMode.Compress, CompressionLevel.BestCompression);
+                            }
+                            using (fOut) {
                                 string json = JsonConvert.SerializeObject(data, Formatting.Indented);
                                 Encoding utf8 = new UTF8Encoding(false, true);
                                 byte[] encodedJson = utf8.GetBytes(json);

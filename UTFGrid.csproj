@@ -77,6 +77,9 @@
     <Reference Include="ESRI.ArcGIS.Version, Version=10.0.0.0, Culture=neutral, PublicKeyToken=8fc3cc631e44ad86, processorArchitecture=x86">
       <SpecificVersion>False</SpecificVersion>
     </Reference>
+    <Reference Include="Ionic.Zlib">
+      <HintPath>.\Ionic.Zlib.dll</HintPath>
+    </Reference>
     <Reference Include="NDesk.Options">
       <HintPath>.\NDesk.Options.dll</HintPath>
     </Reference>
