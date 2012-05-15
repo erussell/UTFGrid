@@ -9,6 +9,7 @@ using ESRI.ArcGIS.esriSystem;
 using ESRI.ArcGIS.Geodatabase;
 using ESRI.ArcGIS.Geometry;
 using Newtonsoft.Json;
+using NDesk.Options;
 
 namespace NatGeo
 {
@@ -16,31 +17,53 @@ namespace NatGeo
     {
         [STAThread()]
         static void Main (string[] args) {
-            if ((args.Length != 2) && (args.Length != 3)) {
-                Console.WriteLine("Usage: UTFGrid.exe <mxd> <destination> (<scales>)");
-                Console.WriteLine("   mxd: Path of mxd to be cooked");
-                Console.WriteLine("   destination: Folder where utfgrid files are to be stored");
-                Console.WriteLine("   scales (optional): List of scale levels between 0 and 19 inclusive,");
-                Console.WriteLine("                      separated by commas");
+            bool showHelp = false;
+            string destination = ".";
+            int[] levels = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 };
+            HashSet<string> fields = null;
+
+            OptionSet p = new OptionSet() {
+                { "d|dir=", "destination directory (defaults to current directory)", d => destination = d },
+                { "l|levels=", 
+                  "list of scale levels [0-19], separated by commas", 
+                  l => levels = l.Split(new char[] { ',' }).Select(s => Convert.ToInt32(s)).ToArray() },
+                { "f|fields=", 
+                  "list of field names to include in UTFGrid data",
+                  f => fields = new HashSet<string>(f.Split(new char[] { ',' })) },
+                { "h|help",  "show this message and exit", h => showHelp = h != null },
+            };
+            List<string> extra;
+            try {
+                extra = p.Parse(args);
+            } catch (OptionException e) {
+                Console.Write("utfgrid");
+                Console.WriteLine(e.Message);
+                Console.WriteLine("Try `utfgrid --help' for more information.");
+                return;
+            }
+            if (showHelp) {
+                Console.WriteLine("Usage: utfgrid [OPTIONS]+ mxd_document");
+                Console.WriteLine("Generate UTFGrid files from the given map document");
+                Console.WriteLine();
+                Console.WriteLine("Options:");
+                p.WriteOptionDescriptions(Console.Out);
+                return;
+            } else if (extra.Count < 1) {
+                Console.WriteLine("utfgrid: no map document specified");
+                Console.WriteLine("Try `utfgrid --help' for more information.");
                 return;
             }
             RuntimeManager.BindLicense(ProductCode.EngineOrDesktop);
-            string mapPath = args[0];
-            string destination = args[1];
-            int[] levels = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 };
-            if (args.Length > 2) {
-                levels = args[2].Split(new char[] { ',' }).Select(s => Convert.ToInt32(s)).ToArray();
-            }
 
             IMapDocument mapDocument = new MapDocumentClass();
-            mapDocument.Open(mapPath, null);
+            mapDocument.Open(extra[0], null);
             IMap map = mapDocument.ActiveView as IMap;
             if (map == null) {
                 map = mapDocument.get_Map(0);
             }
             mapDocument.Close();
             if (map == null) {
-                Console.WriteLine("Unable to open map at " + mapPath);
+                Console.WriteLine("Unable to open map at " + extra[0]);
                 return;
             }
             IActiveView activeView = map as IActiveView;
@@ -55,10 +78,13 @@ namespace NatGeo
                     }
                     string file = String.Format("{0}\\{1}.grid.json", folder, tile.Row);
                     if (!File.Exists(file)) {
-                        using (StreamWriter fOut = File.CreateText(file)) {
-                            Dictionary<string, object> data = CollectData(map, tile.Extent, 128);
-                            if (data.Count > 0) {
-                                fOut.Write(JsonConvert.SerializeObject(data, Formatting.Indented));
+                        Dictionary<string, object> data = CollectData(map, tile.Extent, fields);
+                        if (data != null) {
+                            using (System.IO.FileStream fOut = new System.IO.FileStream(file, FileMode.CreateNew)) {
+                                string json = JsonConvert.SerializeObject(data, Formatting.Indented);
+                                Encoding utf8 = new UTF8Encoding(false, true);
+                                byte[] encodedJson = utf8.GetBytes(json);
+                                fOut.Write(encodedJson, 0, encodedJson.Length);
                             }
                         }
                     }
@@ -66,7 +92,8 @@ namespace NatGeo
             }
         }
 
-        private static Dictionary<string, object> CollectData (IMap map, IEnvelope extent, int tileSize) {
+        private static Dictionary<string, object> CollectData (IMap map, IEnvelope extent, HashSet<string> includeFields) {
+            const int tileSize = 128;
             double cellWidth = extent.Width / (tileSize - 1);
             double cellHeight = extent.Height / (tileSize - 1);
             Dictionary<ValueList, List<Cell>> dataCells = new Dictionary<ValueList, List<Cell>>();
@@ -77,7 +104,7 @@ namespace NatGeo
                     pixelExtent.XMax = pixelExtent.XMin + cellWidth;
                     pixelExtent.YMax = extent.YMax - y * cellHeight;
                     pixelExtent.YMin = pixelExtent.YMax - cellHeight;
-                    ValueList cellData = GetPixelData(map, pixelExtent);
+                    ValueList cellData = GetPixelData(map, pixelExtent, includeFields);
                     if (cellData.Count > 0) {
                         if (dataCells.ContainsKey(cellData)) {
                             dataCells[cellData].Add(new Cell(y, x));
@@ -108,14 +135,18 @@ namespace NatGeo
                     keyIndex += 1;
                 }
             }
-            Dictionary<string, object> result = new Dictionary<string, object>();
-            result.Add("grid", grid.Select(sb => sb.ToString()).ToArray());
-            result.Add("keys", keys.ToArray());
-            result.Add("data", data);
-            return result;
+            if (keys.Count > 1) {
+                Dictionary<string, object> result = new Dictionary<string, object>();
+                result.Add("grid", grid.Select(sb => sb.ToString()).ToArray());
+                result.Add("keys", keys.ToArray());
+                result.Add("data", data);
+                return result;
+            } else {
+                return null;
+            }
         }
             
-        private static ValueList GetPixelData (IMap map, IEnvelope extent) {
+        private static ValueList GetPixelData (IMap map, IEnvelope extent, HashSet<string> includeFields) {
             ValueList result = new ValueList();
             for (int i = 0; i < map.LayerCount; i += 1) {
                 ILayer layer = map.get_Layer(i);
@@ -127,36 +158,39 @@ namespace NatGeo
                     continue;
                 }
                 IArray data = id.Identify(extent);
-                if (data == null) {
-                    continue;
-                }
-                for (int j = 0; j < data.Count; j += 1) {
-                    object foundObj = data.get_Element(j);
-                    IRasterIdentifyObj2 raster = foundObj as IRasterIdentifyObj2;
-                    if (raster != null) {
-                        int propertyIndex = 0;
-                        string property;
-                        string value;
-                        while (true) {
-                            try {
-                                raster.GetPropAndValues(propertyIndex, out property, out value);
-                                if (!"NoData".Equals(value)) {
-                                    result.Add(property, value);
+                if (data != null) {
+                    for (int j = 0; j < data.Count; j += 1) {
+                        object foundObj = data.get_Element(j);
+                        IRasterIdentifyObj2 raster = foundObj as IRasterIdentifyObj2;
+                        IRowIdentifyObject row = foundObj as IRowIdentifyObject;
+                        if (raster != null) {
+                            int propertyIndex = 0;
+                            string property;
+                            string value;
+                            while (true) {
+                                try {
+                                    raster.GetPropAndValues(propertyIndex, out property, out value);
+                                    if ((!"NoData".Equals(value)) &&
+                                        ((includeFields == null) || includeFields.Contains(property))) {
+                                        result.Add(property, value);
+                                    }
+                                    propertyIndex += 1;
+                                } catch {
+                                    break;
                                 }
-                                propertyIndex += 1;
-                            } catch {
-                                break;
+                            }
+                            continue;
+                        } else if (row != null) {
+                            IFields fields = row.Row.Fields;
+                            for (int k = 0; k < fields.FieldCount; k += 1) {
+                                string fieldName = fields.get_Field(k).Name;
+                                if ((includeFields == null) || includeFields.Contains(fieldName)) {
+                                    result.Add(fieldName, row.Row.get_Value(k));
+                                }
                             }
                         }
-                        continue;
-                    }  
-                    IRowIdentifyObject row = foundObj as IRowIdentifyObject;
-                    if (row != null) {
-                        IFields fields = row.Row.Fields;
-                        for (int k = 0; k < fields.FieldCount; k += 1) {
-                            result.Add(fields.get_Field(k).Name, row.Row.get_Value(k));
-                        }
                     }
+                    break;
                 }
             }
             return result;
