@@ -3,14 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using ESRI.ArcGIS;
+using System.Threading;
 using ESRI.ArcGIS.Carto;
 using ESRI.ArcGIS.esriSystem;
 using ESRI.ArcGIS.Geodatabase;
 using ESRI.ArcGIS.Geometry;
-using System.Threading;
 using Ionic.Zlib;
-using NDesk.Options;
 using Newtonsoft.Json;
 
 

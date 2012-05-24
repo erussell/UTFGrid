@@ -1,17 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using ESRI.ArcGIS;
 using ESRI.ArcGIS.Carto;
-using ESRI.ArcGIS.esriSystem;
-using ESRI.ArcGIS.Geodatabase;
 using ESRI.ArcGIS.Geometry;
-using Ionic.Zlib;
 using NDesk.Options;
-using Newtonsoft.Json;
 
 namespace NatGeo.UTFGrid
 {
