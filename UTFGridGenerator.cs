@@ -21,6 +21,7 @@ namespace NatGeo.UTFGrid
     {
         public bool GZip { get; set; }
         public bool Overwrite { get; set; }
+        public bool Verbose { get; set; }
         public string Destination { get; set; }
         public HashSet<string> Fields { get; set; }
         public string MapPath { get { return m_mapPath; } }
@@ -82,7 +83,7 @@ namespace NatGeo.UTFGrid
                 }
                 if ((map.SpatialReference.FactoryCode != 102113) &&
                     (map.SpatialReference.FactoryCode != 102100) &&
-                    (map.SpatialReference.FactoryCode != 3857)) {
+                    (map.SpatialReference.FactoryCode != 3785)) {
                     throw new Exception("Spatial reference of map must be Web Mercator (is " + map.SpatialReference.FactoryCode + ")");
                 }
 
@@ -98,10 +99,14 @@ namespace NatGeo.UTFGrid
                     string file = String.Format("{0}\\{1}.grid.json", folder, tile.Row);
                     if (config.GZip) file += ".gz";
                     if ((!File.Exists(file)) || config.Overwrite) {
-                        Console.WriteLine(Thread.CurrentThread.Name + " generating tile " + tile.Level + ", " + tile.Row + ", " + tile.Col);
+                        if (config.Verbose) {
+                            Console.WriteLine(Thread.CurrentThread.Name + " generating tile " + tile.Level + ", " + tile.Row + ", " + tile.Col);
+                        }
                         Dictionary<string, object> data = CollectData(map, tile.Extent, config.Fields);
                         if (data != null) {
-                            Console.WriteLine(Thread.CurrentThread.Name + " saving to " + file);
+                            if (config.Verbose) {
+                                Console.WriteLine(Thread.CurrentThread.Name + " saving to " + file);
+                            }
                             Stream fOut = new System.IO.FileStream(file, FileMode.Create);
                             if (config.GZip) {
                                 fOut = new GZipStream(fOut, CompressionMode.Compress, CompressionLevel.BestCompression);
@@ -212,7 +217,7 @@ namespace NatGeo.UTFGrid
                             IFields fields = row.Row.Fields;
                             for (int k = 0; k < fields.FieldCount; k += 1) {
                                 string fieldName = fields.get_Field(k).Name;
-                                if ((includeFields == null) || includeFields.Contains(fieldName)) {
+                                if ((includeFields == null) ? (!result.ContainsKey(fieldName)) : includeFields.Contains(fieldName)) {
                                     result.Add(fieldName, row.Row.get_Value(k));
                                 }
                             }

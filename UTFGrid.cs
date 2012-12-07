@@ -16,6 +16,7 @@ namespace NatGeo.UTFGrid
             bool showHelp = false;
             bool gzip = false;
             bool overwrite = false;
+            bool verbose = false;
             string destination = ".";
             int[] levels = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 };
             HashSet<string> fields = null;
@@ -34,6 +35,7 @@ namespace NatGeo.UTFGrid
                   t => threadCount = Convert.ToInt32(t) },
                 { "z|zip",  "zip the json files using gzip compression before saving", z => gzip = z != null },
                 { "o|overwrite", "overwrite existing files", o => overwrite = o != null },
+                { "v|verbose", "verbose output", v => verbose = v != null },
                 { "h|help",  "show this message and exit", h => showHelp = h != null }
             };
             List<string> extra;
@@ -75,7 +77,7 @@ namespace NatGeo.UTFGrid
             }
             if ((map.SpatialReference.FactoryCode != 102113) && 
                 (map.SpatialReference.FactoryCode != 102100) &&
-                (map.SpatialReference.FactoryCode != 3857)) {
+                (map.SpatialReference.FactoryCode != 3785)) {
                 Console.WriteLine("Spatial reference of map must be Web Mercator (is " + map.SpatialReference.FactoryCode + ")");
                 return;
             }
@@ -84,13 +86,12 @@ namespace NatGeo.UTFGrid
             // get the extent from the active view
             IEnvelope fullExtent = activeView.FullExtent;
 
-            Console.WriteLine(fields);
-            foreach (int level in levels)
-                Console.WriteLine(level);
+            Console.WriteLine("starting utfgrid generator with " + threadCount + " threads");
 
             UTFGridGeneratorConfig config = new UTFGridGeneratorConfig(extra[0], DescribeTiles(levels, activeView.FullExtent));
             config.GZip = gzip;
             config.Overwrite = overwrite;
+            config.Verbose = verbose;
             config.Destination = destination;
 
             Thread[] workerThreads = new Thread[threadCount];
@@ -101,7 +102,6 @@ namespace NatGeo.UTFGrid
                 workerThreads[i].IsBackground = true;
                 workerThreads[i].Priority = ThreadPriority.BelowNormal;
                 workerThreads[i].Name = "UTFGridGenerator " + (i + 1).ToString();
-                Console.WriteLine("starting thread " + workerThreads[i].Name);
                 workerThreads[i].Start(config);
             }
 
