@@ -3,6 +3,7 @@ UTFGrid
 
 Windows Console application for generating UTFGrid files from an ArcMap .mxd
 
+```
 Usage: utfgrid [OPTIONS]+ mxd_document
 Generate UTFGrid files from the given map document
 
@@ -18,3 +19,4 @@ Options:
   -o, --overwrite            overwrite existing files
   -v, --verbose              verbose output
   -h, --help                 show this message and exit
+```
